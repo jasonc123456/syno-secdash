@@ -58,25 +58,13 @@
     return Math.round(s / 86400) + " days ago";
   }
   // Windows has no flag emoji (it draws the letters), so detect colour flags once.
-  var EMOJI_FLAGS = (function () {
-    try {
-      var c = document.createElement("canvas");
-      c.width = c.height = 20;
-      var x = c.getContext("2d");
-      x.font = "16px sans-serif";
-      x.textBaseline = "top";
-      x.fillText(String.fromCodePoint(0x1f1fa, 0x1f1f8), 0, 0);
-      var d = x.getImageData(0, 0, 20, 20).data;
-      for (var i = 0; i < d.length; i += 4) {
-        if (d[i + 3] && (Math.abs(d[i] - d[i + 1]) > 20 || Math.abs(d[i + 1] - d[i + 2]) > 20)) return true;
-      }
-    } catch (e) { /* fall through */ }
-    return false;
-  })();
+  // Country flags come from the bundled "SecDash Flags" font (Twemoji), so they
+  // show on every OS, including Windows, which has no flag emoji of its own.
   function flag(cc) {
-    if (!cc || cc.length !== 2) return "";
-    if (!EMOJI_FLAGS) return '<span class="cc">' + esc(cc.toUpperCase()) + "</span>";
-    return String.fromCodePoint(0x1f1a5 + cc.charCodeAt(0), 0x1f1a5 + cc.charCodeAt(1));
+    if (!cc || !/^[a-z]{2}$/i.test(cc)) return "";
+    cc = cc.toUpperCase();
+    return '<span class="flag" role="img" aria-label="' + cc + '" title="' + cc + '">' +
+      String.fromCodePoint(0x1f1a5 + cc.charCodeAt(0), 0x1f1a5 + cc.charCodeAt(1)) + "</span>";
   }
   function place(r) {
     if (!r || !r.cc) return '<span class="muted">unknown</span>';
@@ -141,7 +129,8 @@
     cols.forEach(function (c) {
       var cls = (c.num ? "num " : "") + (c.sort ? "sortable" : "");
       var arrow = opts.sort && c.sort === opts.sort.key ? (opts.sort.dir === "asc" ? " ↑" : " ↓") : "";
-      h += '<th class="' + cls + '"' + (c.sort ? ' data-sort="' + c.sort + '"' : "") + ">" + esc(c.label) + arrow + "</th>";
+      h += '<th class="' + cls + '"' + (c.sort ? ' data-sort="' + c.sort + '"' : "") + ">" + esc(c.label) + arrow +
+        '<span class="col-grip" title="Drag to resize, double-click to reset" aria-hidden="true"></span></th>';
     });
     h += "</tr></thead><tbody>";
     rows.forEach(function (r, i) {
@@ -155,6 +144,67 @@
     el.innerHTML = h + "</tbody></table></div>";
     if (opts.onSort) el.querySelectorAll("th[data-sort]").forEach(function (th) {
       th.addEventListener("click", function () { opts.onSort(th.getAttribute("data-sort")); });
+    });
+    resizable(el, cols.map(function (c) { return c.label; }));
+  }
+
+  // Column widths: drag a header edge to resize, double-click it to reset.
+  // Kept per table (element id) and column label, so they survive refreshes.
+  var COLW_KEY = "secdash-colwidths", colWidths = {};
+  try { colWidths = JSON.parse(localStorage.getItem(COLW_KEY) || "{}") || {}; } catch (e) { /* storage unavailable */ }
+  function saveColWidths() {
+    try { localStorage.setItem(COLW_KEY, JSON.stringify(colWidths)); } catch (e) { /* ignore */ }
+  }
+  function fixWidths(tbl, widths) {
+    var ths = tbl.tHead.rows[0].cells, total = 0;
+    for (var i = 0; i < ths.length; i++) { ths[i].style.width = widths[i] + "px"; total += widths[i]; }
+    tbl.style.width = total + "px";
+    tbl.classList.add("fixed");
+  }
+  function resizable(el, labels) {
+    var tbl = el.querySelector("table"), id = el.id;
+    var saved = id && colWidths[id];
+    if (saved && labels.every(function (l) { return saved[l] > 0; })) {
+      fixWidths(tbl, labels.map(function (l) { return saved[l]; }));
+    }
+    // show the full text of a cell cut short by a narrow column
+    tbl.addEventListener("mouseover", function (e) {
+      var td = e.target.closest && e.target.closest("td");
+      if (td && tbl.classList.contains("fixed") && !td.title && td.scrollWidth > td.clientWidth) td.title = td.textContent.trim();
+    });
+    tbl.querySelectorAll("th .col-grip").forEach(function (grip, i) {
+      grip.addEventListener("click", function (e) { e.stopPropagation(); });  // don't sort
+      grip.addEventListener("dblclick", function (e) {
+        e.stopPropagation();
+        if (id) { delete colWidths[id]; saveColWidths(); }
+        tbl.classList.remove("fixed");
+        tbl.style.width = "";
+        Array.prototype.forEach.call(tbl.tHead.rows[0].cells, function (th) { th.style.width = ""; });
+      });
+      grip.addEventListener("pointerdown", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var widths = Array.prototype.map.call(tbl.tHead.rows[0].cells, function (th) { return Math.round(th.getBoundingClientRect().width); });
+        fixWidths(tbl, widths);
+        var x0 = e.clientX, w0 = widths[i];
+        grip.setPointerCapture(e.pointerId);
+        grip.classList.add("active");
+        function move(ev) { widths[i] = Math.max(48, Math.round(w0 + ev.clientX - x0)); fixWidths(tbl, widths); }
+        function up() {
+          grip.removeEventListener("pointermove", move);
+          grip.removeEventListener("pointerup", up);
+          grip.removeEventListener("pointercancel", up);
+          grip.classList.remove("active");
+          if (id) {
+            colWidths[id] = {};
+            labels.forEach(function (l, k) { colWidths[id][l] = widths[k]; });
+            saveColWidths();
+          }
+        }
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", up);
+        grip.addEventListener("pointercancel", up);
+      });
     });
   }
   function barCell(value, max, color) {

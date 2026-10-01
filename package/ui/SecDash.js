@@ -40,6 +40,44 @@ Ext.define("SYNO.SDS.SecDash.MainWindow", {
 
     onOpen: function () {
         SYNO.SDS.SecDash.MainWindow.superclass.onOpen.apply(this, arguments);
+        this.watchIframeClicks();
+    },
+
+    // Clicks inside the iframe never reach DSM's window manager, so clicking the
+    // page wouldn't raise this window above others. Raise it ourselves, without
+    // calling focus(), so a click into a text box keeps the caret there.
+    watchIframeClicks: function (tries) {
+        var win = this, iframe = this.body && this.body.dom && this.body.dom.querySelector("iframe");
+        if (!iframe) {  // window body not rendered yet
+            tries = tries || 0;
+            if (tries < 20) {
+                setTimeout(function () { win.watchIframeClicks(tries + 1); }, 250);
+            }
+            return;
+        }
+        if (iframe._sdWatched) {
+            return;
+        }
+        iframe._sdWatched = true;
+        var raise = function () {
+            var mgr = win.manager;
+            if (mgr && mgr.getActive && mgr.getActive() === win) {
+                return;
+            }
+            if (mgr && mgr.bringToFront) {
+                mgr.bringToFront(win);
+            } else if (win.toFront) {
+                win.toFront();
+            }
+        };
+        var hook = function () {
+            try {
+                iframe.contentWindow.document.addEventListener("mousedown", raise, true);
+                iframe.contentWindow.document.addEventListener("touchstart", raise, true);
+            } catch (e) { /* not same-origin; nothing to do */ }
+        };
+        iframe.addEventListener("load", hook);
+        hook();
     },
 
     onRequest: function (a) {
