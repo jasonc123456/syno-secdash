@@ -6,7 +6,6 @@
             "desc": "Security analytics: blocked IPs, logins, reverse proxy",
             "icon": "images/secdash_{0}.png",
             "url": "/webman/3rdparty/SecDash/index.html",
-            "appWindow": "SYNO.SDS._ThirdParty.App.SecDash",
             "allUsers": false,
             "grantPrivilege": "local",
             "advanceGrantPrivilege": true,

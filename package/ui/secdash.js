@@ -1,6 +1,8 @@
 /* SecDash UI. Plain JS, no build step. Talks to api.cgi (same directory). */
 (function () {
   "use strict";
+  // Only run on SecDash's own page (DSM may load third-party UI files elsewhere).
+  if (!document.documentElement.classList.contains("sd") || !document.getElementById("view-overview")) return;
 
   var state = {
     tab: "overview",
