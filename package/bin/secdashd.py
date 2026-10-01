@@ -71,21 +71,29 @@ class Daemon:
             except Exception as e:
                 log.warning("autoblock %s: %s", p, e)
 
-        p = os.path.join(batch, "connlog.db")
-        if os.path.exists(p):
+        # connlog: sign-ins; sysdb: "Host [ip] was blocked via [service]" lines
+        for name, key, blocked_only in (("connlog", "connlog_rowid", False),
+                                        ("sysdb", "sysdb_rowid", True)):
+            p = os.path.join(batch, name + ".db")
+            if not os.path.exists(p):
+                continue
             try:
-                since = int(store.get_meta(con, "connlog_rowid", 0))
+                since = int(store.get_meta(con, key, 0))
+                if name == "connlog" and store.get_meta(con, "connlog_rescan") != "2":
+                    since = 0  # one-time re-read to fill in services missed before 0.1.3
+                    store.set_meta(con, "connlog_rescan", "2")
                 top = ingest_connlog.max_rowid(p)
                 if top < since:
                     since = 0  # DSM cleared the log and rowids restarted
-                events = [ev for _, ev in ingest_connlog.read(p, since)]
-                stats["auth_connlog"] = store.add_auth_events(con, events)
-                store.set_meta(con, "connlog_rowid", top)
+                events = [ev for _, ev in ingest_connlog.read(
+                    p, since, blocked_only=blocked_only, source=name)]
+                stats["auth_" + name] = store.add_auth_events(con, events)
+                store.set_meta(con, key, top)
             except Exception as e:
-                log.warning("connlog %s: %s", p, e)
+                log.warning("%s %s: %s", name, p, e)
 
         for sub, reader, adder, key in (
-                ("syslog", ingest_syslog.read, store.add_auth_events, "auth_syslog"),
+                ("syslog", ingest_syslog.read, store.add_syslog_auth_events, "auth_syslog"),
                 ("nginx", ingest_nginx.read, store.add_http_events, "http")):
             d = os.path.join(batch, sub)
             if not os.path.isdir(d):

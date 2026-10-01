@@ -31,9 +31,18 @@ s.backup(d); d.close(); s.close()' "$1" "$2" 2>/dev/null || cp "$1" "$2"
 snapshot_db /etc/synoautoblock.db "$STAGE/autoblock.db"
 snapshot_db /var/log/synolog/.SYNOCONNDB "$STAGE/connlog.db"
 
+# System log: copy only the "Host [ip] was blocked via [service]" lines.
+[ -f /var/log/synolog/.SYNOSYSDB ] && /usr/bin/python3 -c 'import sqlite3,sys
+s=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); d=sqlite3.connect(sys.argv[2])
+d.execute("CREATE TABLE logs(id INTEGER PRIMARY KEY, time INTEGER, msg TEXT)")
+d.executemany("INSERT INTO logs VALUES (?,?,?)", s.execute("SELECT id, time, msg FROM logs"
+  " WHERE msg LIKE '"'"'Host [%] was blocked via%'"'"'"))
+d.commit(); d.close(); s.close()' /var/log/synolog/.SYNOSYSDB "$STAGE/sysdb.db" 2>/dev/null
+
 for f in /var/log/auth.log /var/log/messages; do
     [ -f "$f" ] || continue
-    tail -c "$MAX_LOG_BYTES" "$f" | grep -aE 'sshd\[|ftpd\[' > "$STAGE/syslog/$(basename "$f").log"
+    tail -c "$MAX_LOG_BYTES" "$f" | grep -aE 'sshd\[|ftpd\[|pam_unix\(webui:auth\)' \
+        > "$STAGE/syslog/$(basename "$f").log"
 done
 
 n=0
@@ -48,6 +57,7 @@ done
     echo "dsm=$(sed -n 's/^productversion="\(.*\)"/\1/p' /etc.defaults/VERSION)"
     echo "autoblock=$( [ -f "$STAGE/autoblock.db" ] && echo yes || echo missing)"
     echo "connlog=$( [ -f "$STAGE/connlog.db" ] && echo yes || echo missing)"
+    echo "sysdb=$( [ -f "$STAGE/sysdb.db" ] && echo yes || echo missing)"
     echo "syslog_files=$(ls "$STAGE/syslog" | tr '\n' ' ')"
     echo "nginx_files=$(ls "$STAGE/nginx" | tr '\n' ' ')"
 } > "$STAGE/collector.txt"

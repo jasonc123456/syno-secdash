@@ -32,7 +32,8 @@ DSM 7 doesn't let third-party packages run as root, but DSM's security logs can 
 - **The collector** is a short shell script that you paste into Task Scheduler as a root task. It **only copies** these files:
   - `/etc/synoautoblock.db`
   - the Log Center connection log
-  - sshd/ftpd lines from syslog
+  - only the "Host [ip] was blocked via [service]" lines from the Log Center system log
+  - sshd/ftpd and DSM sign-in failure lines from syslog
   - reverse-proxy access logs
 
   The copies are unpacked **as the unprivileged package user**, so root never writes into a folder the package controls. The script is stored in Task Scheduler, not in the package, so the package can't change what runs as root.
@@ -108,7 +109,7 @@ The dev server serves the real UI and API, with the DSM login check skipped.
 |---|---|
 | `package/bin/secdashd.py` | daemon: ingest, GeoIP, retention, monthly DB update |
 | `package/bin/collector.sh` | root collector (copied into Task Scheduler by the user) |
-| `package/lib/ingest_*.py` | parsers for Auto Block, connection log, syslog, nginx |
+| `package/lib/ingest_*.py` | parsers for Auto Block, connection and system log, syslog, nginx |
 | `package/lib/api.py` | read-only query API used by `api.cgi` |
 | `package/ui/` | the DSM app: `SecDash.js` + `config` (native DSM window), `index.html`/`dashboard.js` (the page inside it), `api.cgi` (DSM auth check) |
 | `scripts/`, `conf/`, `INFO.in` | DSM package metadata and lifecycle scripts |

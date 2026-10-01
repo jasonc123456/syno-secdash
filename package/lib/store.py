@@ -121,7 +121,23 @@ def add_auth_events(con, events):
             (e["ts"], e.get("ip"), e.get("user"), e.get("service"), e["result"],
              e["source"], e["hash"]))
         n += cur.rowcount
+        if not cur.rowcount and e.get("service"):
+            # seen before: fill in a service that older versions couldn't parse
+            con.execute("UPDATE auth_events SET service=? WHERE hash=? AND service IS NULL",
+                        (e["service"], e["hash"]))
     return n
+
+
+def add_syslog_auth_events(con, events):
+    """Like add_auth_events, but skips DSM failures the connection log already has."""
+    def fresh(e):
+        if e["service"] != "DSM":
+            return True
+        return con.execute(
+            "SELECT 1 FROM auth_events WHERE source='connlog' AND result=? AND ip=?"
+            " AND ts BETWEEN ? AND ? LIMIT 1",
+            (e["result"], e["ip"], e["ts"] - 5, e["ts"] + 5)).fetchone() is None
+    return add_auth_events(con, (e for e in events if fresh(e)))
 
 
 def add_http_events(con, events):

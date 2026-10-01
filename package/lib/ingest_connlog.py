@@ -20,6 +20,8 @@ _IP = re.compile(r"(?:from|Host|IP address|IP)\s*\[([^\]]+)\]", re.I)
 _SERVICE = re.compile(
     r"(?:sign(?:ed)? in to|log(?:ged)? in(?: to)?|logged into|blocked|via)\s*\[([^\]]+)\]", re.I)
 
+_BLOCKED = re.compile(r"^(?:Host|IP address|IP) \[[^\]]+\] (?:was|has been) blocked", re.I)
+
 TIME_COLS = ("utcsec", "time", "timestamp", "logtime", "date")
 MSG_COLS = ("msg", "message", "event", "content")
 
@@ -72,8 +74,12 @@ def max_rowid(path):
         con.close()
 
 
-def read(path, since_id=0):
-    """Yield (row_id, event) for rows with rowid > since_id."""
+def read(path, since_id=0, blocked_only=False, source="connlog"):
+    """Yield (row_id, event) for rows with rowid > since_id.
+
+    blocked_only keeps just "Host [ip] was blocked via [service]" lines; DSM 7.3
+    writes those to the system log (.SYNOSYSDB) rather than the connection log.
+    """
     con = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
     try:
         found = _find_table(con)
@@ -82,13 +88,15 @@ def read(path, since_id=0):
         table, cols, msg_col, time_col = found
         user_col = next((c for c in ("username", "user", "who") if c in cols), None)
         ip_col = next((c for c in ("ip", "ipaddr", "host") if c in cols), None)
-        sql = 'SELECT rowid, "%s", "%s"%s%s FROM "%s" WHERE rowid > ? ORDER BY rowid' % (
-            time_col, msg_col,
-            ', "%s"' % user_col if user_col else ", NULL",
-            ', "%s"' % ip_col if ip_col else ", NULL",
-            table)
-        for rowid, ts, msg, col_user, col_ip in con.execute(sql, (since_id,)):
+        # DSM 7.3 also stores the service in its own column
+        svc_col = next((c for c in ("protocol", "service") if c in cols), None)
+        opt = lambda c: ', "%s"' % c if c else ", NULL"  # noqa: E731
+        sql = 'SELECT rowid, "%s", "%s"%s%s%s FROM "%s" WHERE rowid > ? ORDER BY rowid' % (
+            time_col, msg_col, opt(user_col), opt(ip_col), opt(svc_col), table)
+        for rowid, ts, msg, col_user, col_ip, col_svc in con.execute(sql, (since_id,)):
             if not msg or ts is None:
+                continue
+            if blocked_only and not _BLOCKED.match(str(msg)):
                 continue
             parsed = classify(str(msg))
             if parsed is None:
@@ -100,10 +108,11 @@ def read(path, since_id=0):
                 continue
             ip = ip or norm_ip(col_ip)
             user = user or col_user
+            service = service or (str(col_svc) if col_svc else None)
             yield rowid, {
                 "ts": ts, "ip": ip, "user": user, "service": service,
-                "result": result, "source": "connlog",
-                "hash": event_hash("connlog", ts, msg),
+                "result": result, "source": source,
+                "hash": event_hash(source, ts, msg),
             }
     finally:
         con.close()
