@@ -58,7 +58,7 @@ Data shows up within a minute. On the first run, the IP lookup database is upgra
 
 | | |
 |---|---|
-| **Tested on** | DSM 7.3.2 on an **x86_64** (Intel/AMD) NAS |
+| **Tested on** | DSM 7.3.2 and 7.4.1 on an **x86_64** (Intel/AMD) NAS |
 | **Should also work on** | DSM 7.2+ on ARM models. The package is `noarch` (Python and shell only, nothing compiled), but this hasn't been tested yet. Reports welcome. |
 | **Needs** | `python3`, which is built into DSM 7 |
 | **Not supported** | DSM 6.x. Its package format and desktop integration are different. |
@@ -73,7 +73,7 @@ NGINX_LOGS="/var/log/nginx/*access*.log /volume1/docker/proxy/logs/*access*.log"
 
 ### What is stored
 
-Everything lives in `/var/packages/SecDash/var/secdash.db` on the NAS and is kept for 365 days. The only outbound traffic is the monthly download of the DB-IP database from `download.db-ip.com`. Uninstalling the package deletes the data. The collector task then does nothing, and you can delete it.
+Everything lives in `/var/packages/SecDash/var/secdash.db` on the NAS and is kept for 365 days by default. You can change that, or delete older records straight away, under **Setup › Data retention**. The only outbound traffic is the monthly download of the DB-IP database from `download.db-ip.com`. Uninstalling the package deletes the data. The collector task then does nothing, and you can delete it.
 
 ## Checking your DSM's log formats
 

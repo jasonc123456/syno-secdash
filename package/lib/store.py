@@ -175,13 +175,26 @@ def put_geo(con, ip, info, now=None):
          now or int(time.time())))
 
 
+# What retention removes. Active blocks are never removed: they mirror DSM's
+# current block list.
+_OLD = (("auth_events", "ts < ?"),
+        ("http_events", "ts < ?"),
+        ("blocks", "active=0 AND last_seen < ?"))
+
+
+def count_older(con, cutoff):
+    return {t: con.execute("SELECT COUNT(*) FROM %s WHERE %s" % (t, w), (cutoff,)).fetchone()[0]
+            for t, w in _OLD}
+
+
 def apply_retention(con, days, now=None):
+    """Delete records older than `days`; returns {table: rows deleted}."""
     cutoff = (now or int(time.time())) - days * 86400
-    con.execute("DELETE FROM auth_events WHERE ts < ?", (cutoff,))
-    con.execute("DELETE FROM http_events WHERE ts < ?", (cutoff,))
-    con.execute("DELETE FROM blocks WHERE active=0 AND last_seen < ?", (cutoff,))
+    deleted = {t: con.execute("DELETE FROM %s WHERE %s" % (t, w), (cutoff,)).rowcount
+               for t, w in _OLD}
     con.execute(
         """DELETE FROM geo WHERE ip NOT IN (
                SELECT ip FROM blocks
                UNION SELECT ip FROM auth_events WHERE ip IS NOT NULL
                UNION SELECT ip FROM http_events)""")
+    return deleted

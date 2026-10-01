@@ -52,6 +52,23 @@ class Handler(SimpleHTTPRequestHandler):
         self.path = "/" + url.path[len(PREFIX):]
         super().do_GET()
 
+    def do_POST(self):
+        url = urlsplit(self.path)
+        if url.path != PREFIX + "api.cgi":
+            self.send_error(404)
+            return
+        con = store.connect(self.db)
+        try:
+            code, body = api.handle(con, dict(parse_qsl(url.query)), db_path=self.db, write=True)
+        finally:
+            con.close()
+        out = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(out)))
+        self.end_headers()
+        self.wfile.write(out)
+
     def log_message(self, fmt, *args):
         pass
 

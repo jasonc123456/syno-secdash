@@ -190,7 +190,10 @@ class Daemon:
                 return
             days = int(store.get_meta(con, "retention_days", DEFAULT_RETENTION_DAYS))
             with con:
-                store.apply_retention(con, days)
+                if days > 0:  # 0 = keep forever
+                    deleted = store.apply_retention(con, days)
+                    if any(deleted.values()):
+                        log.info("retention %d days: deleted %s", days, deleted)
                 store.set_meta(con, "retention_last", int(time.time()))
             con.execute("PRAGMA optimize")
         finally:

@@ -5,6 +5,8 @@ handle(con, params) -> (http_status, dict). All SQL is parameterized.
 import os
 import time
 
+import store
+
 RANGES = {"24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400, "90d": 90 * 86400,
           "1y": 365 * 86400, "all": None}
 # bucket sizes chosen to keep ~24-120 points per chart
@@ -331,20 +333,60 @@ def status(con, p, now, pkg_dir=None, db_path=None):
         "geo_db_date": meta.get("geo_db_date"),
         "geo_update_month": meta.get("geo_update_month"),
         "retention_days": int(meta.get("retention_days", 365)),
+        "retention_choices": list(RETENTION_CHOICES),
         "counts": counts,
         "db_bytes": os.path.getsize(db_path) if db_path and os.path.exists(db_path) else None,
         "collector_script": collector,
     }
 
 
+RETENTION_CHOICES = (30, 90, 180, 365, 730, 1095, 1825, 0)  # 0 = keep forever
+
+
+def prune_preview(con, p, now):
+    days = _int(p, "days", 365, 1, 3650)
+    return {"days": days, "counts": store.count_older(con, now - days * 86400)}
+
+
+def set_settings(con, p, now):
+    try:
+        days = int(p.get("retention_days", ""))
+    except ValueError:
+        days = None
+    if days not in RETENTION_CHOICES:
+        raise BadRequest("retention_days must be one of %s" % (RETENTION_CHOICES,))
+    with con:
+        store.set_meta(con, "retention_days", days)
+        store.set_meta(con, "retention_last", 0)  # daemon applies it on its next pass
+    return {"retention_days": days}
+
+
+def prune(con, p, now):
+    days = _int(p, "days", 365, 1, 3650)
+    with con:
+        deleted = store.apply_retention(con, days, now)
+    try:  # give the space back; skipped if the daemon is busy writing
+        con.execute("VACUUM")
+        con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except Exception:
+        pass
+    return {"days": days, "deleted": deleted}
+
+
 ENDPOINTS = {"summary": summary, "timeline": timeline, "geo": geo, "blocks": blocks,
-             "logins": logins, "web": web, "ip": ip_detail}
+             "logins": logins, "web": web, "ip": ip_detail, "prune_preview": prune_preview}
+# These change data, so they are only served for POST requests (see cgi_main.py).
+WRITE_ENDPOINTS = {"settings": set_settings, "prune": prune}
 
 
-def handle(con, params, pkg_dir=None, db_path=None, now=None):
+def handle(con, params, pkg_dir=None, db_path=None, now=None, write=False):
     now = int(now or time.time())
     name = params.get("q", "")
     try:
+        if name in WRITE_ENDPOINTS:
+            if not write:
+                return 405, {"error": "%s needs a POST request" % name}
+            return 200, WRITE_ENDPOINTS[name](con, params, now)
         if name == "status":
             return 200, status(con, params, now, pkg_dir=pkg_dir, db_path=db_path)
         fn = ENDPOINTS.get(name)

@@ -96,12 +96,12 @@
     return tokenPromise;
   }
 
-  function api(q, extra) {
+  function api(q, extra, method) {
     var p = new URLSearchParams(Object.assign({ q: q, range: state.range, tz: new Date().getTimezoneOffset() }, extra || {}));
     if (state.cc && !(extra && "cc" in extra)) p.set("cc", state.cc);
     return synoToken().then(function (token) {
       if (token) p.set("SynoToken", token);
-      return fetch("api.cgi?" + p.toString(), { credentials: "same-origin", headers: token ? { "X-SYNO-TOKEN": token } : {} });
+      return fetch("api.cgi?" + p.toString(), { method: method || "GET", credentials: "same-origin", headers: token ? { "X-SYNO-TOKEN": token } : {} });
     }).then(function (r) {
       return r.json().catch(function () { return { error: "HTTP " + r.status }; }).then(function (body) {
         if (!r.ok) {
@@ -592,11 +592,70 @@
         "<dt>GeoIP database</dt><dd>" + esc(s.geo_db_date || "—") + (s.geo_update_month ? " (City + ASN Lite, updated " + esc(s.geo_update_month) + ")" : ' <span class="muted">(bundled Country Lite; City/ASN download pending)</span>') + "</dd>" +
         "<dt>Stored</dt><dd>" + fmt(s.counts.blocks) + " blocked IPs · " + fmt(s.counts.auth_events) + " login events · " + fmt(s.counts.http_events) + " web requests · " + fmt(s.counts.geo) + " located IPs</dd>" +
         "<dt>Database size</dt><dd>" + (s.db_bytes != null ? (s.db_bytes / 1048576).toFixed(1) + " MB" : "—") + "</dd>" +
-        "<dt>Retention</dt><dd>" + fmt(s.retention_days) + " days</dd>" +
+        "<dt>Retention</dt><dd>" + esc(retentionLabel(s.retention_days)) + "</dd>" +
         "</dl>";
+      var sel = $("ret-days");
+      if (!sel.dataset.dirty) {
+        var choices = s.retention_choices || [s.retention_days];
+        if (choices.indexOf(s.retention_days) < 0) choices = choices.concat([s.retention_days]);
+        sel.innerHTML = choices.map(function (d) {
+          return '<option value="' + d + '"' + (d === s.retention_days ? " selected" : "") + ">" + esc(retentionLabel(d)) + "</option>";
+        }).join("");
+        sel.dataset.saved = s.retention_days;
+      }
       $("st-script").textContent = s.collector_script || "(collector script not found)";
       $("version").textContent = "SecDash " + s.version;
       return s;
+    });
+  }
+
+  function retentionLabel(d) {
+    if (!d) return "Forever";
+    if (d % 365 === 0) return d / 365 + (d === 365 ? " year" : " years");
+    if (d === 180) return "6 months";
+    return fmt(d) + " days";
+  }
+  var TABLE_NAMES = { auth_events: "login events", http_events: "web requests", blocks: "released blocks" };
+  function describeCounts(c) {
+    return Object.keys(TABLE_NAMES).map(function (k) { return fmt(c[k] || 0) + " " + TABLE_NAMES[k]; }).join(", ");
+  }
+  function bindRetention() {
+    var sel = $("ret-days"), save = $("ret-save"), msg = $("ret-msg");
+    sel.addEventListener("change", function () {
+      sel.dataset.dirty = sel.value !== sel.dataset.saved ? "1" : "";
+      save.disabled = !sel.dataset.dirty;
+      msg.textContent = "";
+    });
+    save.addEventListener("click", function () {
+      save.disabled = true;
+      api("settings", { retention_days: sel.value }, "POST").then(function (r) {
+        sel.dataset.dirty = "";
+        msg.textContent = r.retention_days ? "Saved. Older data is removed within a minute." : "Saved. Data is kept forever.";
+        return loadSetup();
+      }).catch(function (e) { save.disabled = false; msg.textContent = "Couldn't save: " + e.message; });
+    });
+
+    var box = $("prune-confirm"), input = $("prune-days");
+    function close() { box.hidden = true; box.innerHTML = ""; }
+    input.addEventListener("input", close);
+    $("prune-check").addEventListener("click", function () {
+      var days = parseInt(input.value, 10);
+      if (!(days >= 1 && days <= 3650)) { box.hidden = false; box.textContent = "Enter a number of days from 1 to 3650."; return; }
+      api("prune_preview", { days: days }).then(function (r) {
+        var total = Object.keys(r.counts).reduce(function (a, k) { return a + r.counts[k]; }, 0);
+        box.hidden = false;
+        if (!total) { box.innerHTML = "Nothing is older than " + fmt(days) + " days."; return; }
+        box.innerHTML = '<span class="grow">Permanently delete ' + esc(describeCounts(r.counts)) + " older than " + fmt(days) + " days? This can't be undone.</span>" +
+          '<button class="btn danger" id="prune-go">Delete</button><button class="btn" id="prune-cancel">Cancel</button>';
+        $("prune-cancel").addEventListener("click", close);
+        $("prune-go").addEventListener("click", function () {
+          this.disabled = true;
+          api("prune", { days: days }, "POST").then(function (res) {
+            box.innerHTML = "Deleted " + esc(describeCounts(res.deleted)) + ".";
+            return loadSetup();
+          }).catch(function (e) { box.textContent = "Couldn't delete: " + e.message; });
+        });
+      }).catch(function (e) { box.hidden = false; box.textContent = "Couldn't check: " + e.message; });
     });
   }
 
@@ -694,6 +753,7 @@
   $("bl-csv").addEventListener("click", exportCsv);
   $("dr-close").addEventListener("click", function () { $("drawer").hidden = true; });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") $("drawer").hidden = true; });
+  bindRetention();
   $("st-copy").addEventListener("click", function () {
     var txt = $("st-script").textContent;
     var done = function () { $("st-copy").textContent = "Copied"; setTimeout(function () { $("st-copy").textContent = "Copy script"; }, 1500); };

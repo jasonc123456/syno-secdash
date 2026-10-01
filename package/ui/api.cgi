@@ -27,6 +27,11 @@ if [ "$TOKEN_SRC" = none ] && [ -n "$HTTP_X_SYNO_TOKEN" ]; then
     QUERY_STRING="${QUERY_STRING:+$QUERY_STRING&}SynoToken=$tok"
     TOKEN_SRC=header
 fi
+# Changes (POST) must carry the token the page got from DSM: fetching one here
+# would let another site's form post through with just the session cookie.
+if [ "$TOKEN_SRC" = none ] && [ "$ORIG_METHOD" = POST ]; then
+    deny "403 Forbidden" "missing SynoToken"
+fi
 if [ "$TOKEN_SRC" = none ] && [ -x "$LOGIN" ]; then
     tok=$(QUERY_STRING="enable_syno_token=yes" REQUEST_METHOD=GET "$LOGIN" 2>/dev/null |
           sed -n 's/.*"SynoToken" *: *"\([^"]*\)".*/\1/p' | head -n 1)

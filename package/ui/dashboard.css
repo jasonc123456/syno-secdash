@@ -177,6 +177,14 @@ html.sd .check { display: inline-flex; gap: 6px; align-items: center; color: var
 html.sd .btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink); padding: 5px 12px; border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
 html.sd .btn:hover { background: var(--wash); }
 html.sd .btn:disabled { opacity: 0.45; cursor: default; }
+html.sd .btn.danger { background: var(--critical); border-color: var(--critical); color: #fff; }
+html.sd .btn.danger:hover { filter: brightness(0.92); }
+html.sd .setting { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 10px; }
+html.sd .setting label { font-weight: 600; }
+html.sd .setting select, html.sd .setting input[type=number] { padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--ink); font: inherit; font-size: 13px; }
+html.sd .setting input[type=number] { width: 7em; }
+html.sd .confirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--wash); font-size: 13px; }
+html.sd .confirm .grow { flex: 1 1 280px; }
 html.sd .pager { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 10px; }
 /* status icons (never color alone) */
 html.sd .status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
