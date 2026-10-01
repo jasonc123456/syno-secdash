@@ -212,3 +212,9 @@ html.sd .filters[hidden] ~ main { padding-top: 16px; }
 html.sd.embedded .brand { display: none; }
 html.sd.embedded .top { padding-top: 4px; }
 html.sd .cc { display: inline-block; min-width: 2.4em; padding: 0 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-align: center; color: var(--ink-2); vertical-align: 1px; }
+html.sd .theme-switch { margin-left: auto; display: inline-flex; gap: 2px; padding: 2px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--page); }
+html.sd .theme-switch button { width: 30px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+html.sd .theme-switch button:hover { background: var(--wash); color: var(--ink); }
+html.sd .theme-switch button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border); }
+html.sd .theme-switch svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+html.sd .theme-switch button[data-theme="dark"] svg { fill: currentColor; stroke: none; }

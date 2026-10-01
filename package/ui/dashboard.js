@@ -672,16 +672,16 @@
   function applyTheme(t) {
     if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
     else document.documentElement.removeAttribute("data-theme");
-    document.querySelectorAll("#st-theme button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.theme === (t || "auto"))); });
+    document.querySelectorAll("#theme button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.theme === (t || "auto"))); });
   }
   var theme = "auto";
   try { theme = localStorage.getItem("secdash-theme") || "auto"; } catch (e) { /* ignore */ }
   applyTheme(theme);
-  document.querySelectorAll("#st-theme button").forEach(function (b) {
+  document.querySelectorAll("#theme button").forEach(function (b) {
     b.addEventListener("click", function () {
       try { localStorage.setItem("secdash-theme", b.dataset.theme); } catch (e) { /* ignore */ }
       applyTheme(b.dataset.theme);
-      chartBase();
+      refresh();  // charts and map read colours when drawn
     });
   });
 
