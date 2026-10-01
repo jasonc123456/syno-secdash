@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecDash</title>
+<link rel="icon" href="images/secdash_32.png">
+<link rel="stylesheet" href="vendor/jsvectormap.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="images/secdash_32.png" alt="" width="24" height="24"><span>SecDash</span></div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button role="tab" data-tab="map">Map</button>
+    <button role="tab" data-tab="blocks">Blocked IPs</button>
+    <button role="tab" data-tab="logins">Logins</button>
+    <button role="tab" data-tab="web">Web</button>
+    <button role="tab" data-tab="setup">Setup</button>
+  </nav>
+</header>
+
+<div class="filters" id="filters">
+  <div class="seg" id="range" role="radiogroup" aria-label="Time range">
+    <button data-range="24h">24h</button>
+    <button data-range="7d">7 days</button>
+    <button data-range="30d">30 days</button>
+    <button data-range="90d">90 days</button>
+    <button data-range="1y">1 year</button>
+    <button data-range="all">All</button>
+  </div>
+  <span class="chip" id="cc-chip" hidden><span id="cc-label"></span><button id="cc-clear" aria-label="Clear country filter">×</button></span>
+  <span class="grow"></span>
+  <span class="muted small" id="freshness"></span>
+</div>
+
+<div class="banner" id="banner" hidden></div>
+
+<main>
+  <!-- Overview -->
+  <section class="view" id="view-overview">
+    <div class="tiles" id="tiles"></div>
+    <div class="card">
+      <div class="card-head"><h2>Security events over time</h2><span class="muted small">each panel has its own scale</span></div>
+      <div class="multiples">
+        <div class="multiple"><div class="mult-head"><i style="background:var(--s1)"></i>Failed logins<span class="muted" id="tl-fail-total"></span></div><div class="chart-box mini"><canvas id="tl-fail"></canvas></div></div>
+        <div class="multiple"><div class="mult-head"><i style="background:var(--s2)"></i>New blocks<span class="muted" id="tl-blocked-total"></span></div><div class="chart-box mini"><canvas id="tl-blocked"></canvas></div></div>
+        <div class="multiple"><div class="mult-head"><i style="background:var(--s3)"></i>Successful logins<span class="muted" id="tl-success-total"></span></div><div class="chart-box mini"><canvas id="tl-success"></canvas></div></div>
+      </div>
+      <details class="table-toggle"><summary>View as table</summary><div id="tl-table"></div></details>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head"><h2>Top attacking countries</h2></div>
+        <div id="ov-countries"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Newest blocks</h2></div>
+        <div id="ov-blocks"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Map -->
+  <section class="view" id="view-map" hidden>
+    <div class="card">
+      <div class="card-head">
+        <h2>Where blocked IPs and failed logins come from</h2>
+        <div class="seg small" id="map-metric" role="radiogroup" aria-label="Map metric">
+          <button data-metric="attacks" aria-pressed="true">Blocks + failed logins</button>
+          <button data-metric="blocks">Blocks</button>
+          <button data-metric="fails">Failed logins</button>
+          <button data-metric="http_errors">Web errors</button>
+        </div>
+      </div>
+      <div id="map" class="map"></div>
+      <div class="map-legend" id="map-legend"></div>
+      <p class="muted small">Click a country to filter every tab. Dots mark city locations (City Lite database required).</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>By country</h2></div>
+      <div id="map-table"></div>
+    </div>
+  </section>
+
+  <!-- Blocked IPs -->
+  <section class="view" id="view-blocks" hidden>
+    <div class="card">
+      <div class="toolbar">
+        <input type="search" id="bl-q" placeholder="Search IP, country, city, network…" aria-label="Search blocked IPs">
+        <label class="check"><input type="checkbox" id="bl-active"> Currently blocked only</label>
+        <span class="grow"></span>
+        <span class="muted small" id="bl-count"></span>
+        <button class="btn" id="bl-csv">Export CSV</button>
+      </div>
+      <div id="bl-table"></div>
+      <div class="pager"><button class="btn" id="bl-prev">Previous</button><span id="bl-page" class="muted small"></span><button class="btn" id="bl-next">Next</button></div>
+    </div>
+  </section>
+
+  <!-- Logins -->
+  <section class="view" id="view-logins" hidden>
+    <div class="card" id="unusual-card">
+      <div class="card-head"><h2>Successful sign-ins from new places</h2></div>
+      <div id="lg-unusual"></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head"><h2>By service</h2><div class="legend" id="svc-legend"></div></div>
+        <div class="chart-box short"><canvas id="svc-chart"></canvas></div>
+        <details class="table-toggle"><summary>View as table</summary><div id="svc-table"></div></details>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Most-tried usernames</h2></div>
+        <div id="lg-users"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Failed logins by day and hour</h2><span class="muted small">your local time</span></div>
+      <div id="lg-heat" class="heat"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Recent events</h2></div>
+      <div id="lg-recent"></div>
+    </div>
+  </section>
+
+  <!-- Web -->
+  <section class="view" id="view-web" hidden>
+    <div class="card" id="web-empty" hidden>
+      <h2>No reverse-proxy traffic yet</h2>
+      <p>SecDash reads nginx access logs from <code>/var/log/nginx/*access*.log</code>. DSM doesn't write reverse-proxy access logs by default. See the README section “Reverse-proxy logs” for how to turn them on.</p>
+    </div>
+    <div id="web-body">
+      <div class="card">
+        <div class="card-head"><h2>Responses by status class</h2><div class="legend" id="web-legend"></div></div>
+        <div class="chart-box"><canvas id="web-chart"></canvas></div>
+        <details class="table-toggle"><summary>View as table</summary><div id="web-table"></div></details>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="card-head"><h2>IPs with the most errors (4xx/5xx)</h2></div><div id="web-ips"></div></div>
+        <div class="card"><div class="card-head"><h2>Most-probed paths</h2></div><div id="web-paths"></div></div>
+      </div>
+      <div class="card"><div class="card-head"><h2>User agents behind errors</h2></div><div id="web-ua"></div></div>
+    </div>
+  </section>
+
+  <!-- Setup -->
+  <section class="view" id="view-setup" hidden>
+    <div class="card">
+      <div class="card-head"><h2>Status</h2></div>
+      <div id="st-status"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Collector task (one-time setup)</h2></div>
+      <ol class="steps">
+        <li>Open <b>Control Panel › Task Scheduler › Create › Scheduled Task › User-defined script</b>.</li>
+        <li><b>General:</b> name it <code>SecDash collector</code> and set <b>User</b> to <code>root</code>.</li>
+        <li><b>Schedule:</b> daily, repeat every <b>5 minutes</b> all day.</li>
+        <li><b>Task Settings:</b> paste the script below into <i>Run command</i>, then save and click <b>Run</b> once.</li>
+      </ol>
+      <p class="muted small">The script only copies DSM's block list and logs into SecDash's inbox. It is extracted as the unprivileged <code>sc-secdash</code> user and never runs code from the package.</p>
+      <div class="code-wrap"><button class="btn" id="st-copy">Copy script</button><pre id="st-script"></pre></div>
+    </div>
+  </section>
+</main>
+
+<aside class="drawer" id="drawer" hidden aria-label="IP details">
+  <div class="drawer-head"><h2 id="dr-title"></h2><button class="btn" id="dr-close" aria-label="Close">Close</button></div>
+  <div id="dr-body"></div>
+</aside>
+
+<footer class="foot">
+  <span id="version"></span>
+  <span><a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)</span>
+  <span><a href="https://github.com/jasonc123456/syno-secdash" target="_blank" rel="noopener">GitHub</a></span>
+</footer>
+
+<script src="vendor/chart.umd.min.js"></script>
+<script src="vendor/jsvectormap.min.js"></script>
+<script src="vendor/world.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

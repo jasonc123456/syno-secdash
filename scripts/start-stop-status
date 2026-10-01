@@ -1,0 +1,51 @@
+#!/bin/sh
+PKG_DIR="${SYNOPKG_PKGDEST:-/var/packages/SecDash/target}"
+VAR_DIR="${SYNOPKG_PKGVAR:-/var/packages/SecDash/var}"
+PID_FILE="$VAR_DIR/secdashd.pid"
+LOG_FILE="$VAR_DIR/secdash.log"
+
+find_python() {
+    for p in /usr/bin/python3 /bin/python3 /var/packages/Python3.9/target/usr/bin/python3; do
+        [ -x "$p" ] && { echo "$p"; return; }
+    done
+    command -v python3
+}
+
+is_running() {
+    [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
+}
+
+case "$1" in
+    start)
+        is_running && exit 0
+        PY=$(find_python)
+        [ -n "$PY" ] || { echo "python3 not found" >&2; exit 1; }
+        mkdir -p "$VAR_DIR/inbox" "$VAR_DIR/geo"
+        SYNOPKG_PKGVER="$SYNOPKG_PKGVER" nohup "$PY" "$PKG_DIR/bin/secdashd.py" \
+            --var "$VAR_DIR" --pkg "$PKG_DIR" --log "$LOG_FILE" >/dev/null 2>&1 &
+        echo $! > "$PID_FILE"
+        exit 0
+        ;;
+    stop)
+        if is_running; then
+            pid=$(cat "$PID_FILE")
+            kill "$pid"
+            i=0
+            while kill -0 "$pid" 2>/dev/null && [ $i -lt 20 ]; do sleep 1; i=$((i + 1)); done
+            kill -9 "$pid" 2>/dev/null
+        fi
+        rm -f "$PID_FILE"
+        exit 0
+        ;;
+    status)
+        is_running && exit 0
+        exit 3
+        ;;
+    log)
+        echo "$LOG_FILE"
+        exit 0
+        ;;
+    *)
+        exit 1
+        ;;
+esac

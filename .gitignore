@@ -1,0 +1,10 @@
+dist/
+build/
+*.spk
+__pycache__/
+*.pyc
+package/geo/*.mmdb
+dev/*.db
+dev/*.db-*
+discover-*.txt
+.venv/

@@ -1,0 +1,4 @@
+#!/bin/sh
+VAR_DIR="${SYNOPKG_PKGVAR:-/var/packages/SecDash/var}"
+mkdir -p "$VAR_DIR/inbox" "$VAR_DIR/geo"
+exit 0

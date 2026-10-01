@@ -1,0 +1,10 @@
+[
+    {
+        "step_title": "One-time setup after install",
+        "items": [
+            {
+                "desc": "SecDash runs without root, so it needs a small root task to hand it DSM's security logs.<br><br>After installing: open <b>SecDash</b> from the main menu and go to the <b>Setup</b> tab. It shows a script to paste into <b>Control Panel &gt; Task Scheduler &gt; Create &gt; Scheduled Task &gt; User-defined script</b>, run as <b>root</b> every 5 minutes.<br><br>The script only copies files; it never runs code from the package."
+            }
+        ]
+    }
+]
