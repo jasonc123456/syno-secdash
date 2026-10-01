@@ -53,7 +53,14 @@ DSM 7 doesn't let third-party packages run as root, but DSM's security logs can 
 
 Data shows up within a minute. On the first run, the IP lookup database is upgraded from Country Lite (bundled) to City and ASN Lite, which the NAS downloads itself.
 
-Requirements: DSM 7.0 or later on any architecture, with `python3` (built into DSM 7.x).
+### Compatibility
+
+| | |
+|---|---|
+| **Tested on** | DSM 7.3.2 on an **x86_64** (Intel/AMD) NAS |
+| **Should also work on** | DSM 7.2+ on ARM models. The package is `noarch` (Python and shell only, nothing compiled), but this hasn't been tested yet. Reports welcome. |
+| **Needs** | `python3`, which is built into DSM 7 |
+| **Not supported** | DSM 6.x. Its package format and desktop integration are different. |
 
 ### Reverse-proxy logs
 
