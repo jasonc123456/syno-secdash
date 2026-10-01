@@ -234,18 +234,24 @@ def logins(con, p, now):
     recent = _rows(con.execute(
         "SELECT e.ts, e.ip, e.user, e.service, e.result, e.source, g.cc, g.country, g.org"
         + base + " ORDER BY e.ts DESC LIMIT 200", args))
-    # successful logins from an IP or country never seen succeeding before this range
+    # Successful sign-ins from a country or network (ASN) this user has never
+    # signed in from before. Changing IPs within one carrier (mobile, CGNAT)
+    # are normal and not flagged.
     unusual = _rows(con.execute(
-        """SELECT e.ts, e.ip, e.user, e.service, g.cc, g.country, g.city, g.org,
+        """SELECT e.ts, e.ip, e.user, e.service, g.cc, g.country, g.city, g.asn, g.org,
                   NOT EXISTS (SELECT 1 FROM auth_events o LEFT JOIN geo og ON og.ip=o.ip
-                              WHERE o.result='success' AND o.ts<e.ts AND og.cc=g.cc)
+                              WHERE o.result='success' AND o.ts<e.ts
+                                AND COALESCE(o.user,'')=COALESCE(e.user,'') AND og.cc=g.cc)
                       AS new_country,
-                  NOT EXISTS (SELECT 1 FROM auth_events o
-                              WHERE o.result='success' AND o.ts<e.ts AND o.ip=e.ip) AS new_ip
+                  NOT EXISTS (SELECT 1 FROM auth_events o LEFT JOIN geo og ON og.ip=o.ip
+                              WHERE o.result='success' AND o.ts<e.ts
+                                AND COALESCE(o.user,'')=COALESCE(e.user,'')
+                                AND COALESCE(og.asn, og.org, o.ip)=COALESCE(g.asn, g.org, e.ip))
+                      AS new_network
            FROM auth_events e LEFT JOIN geo g ON g.ip=e.ip
            WHERE e.result='success' AND e.ts>=? AND COALESCE(g.cc,'') != 'LAN'""" + ccw +
-        " ORDER BY e.ts DESC LIMIT 500", args))
-    unusual = [u for u in unusual if u["new_country"] or u["new_ip"]][:50]
+        " ORDER BY e.ts DESC LIMIT 1000", args))
+    unusual = [u for u in unusual if u["new_country"] or u["new_network"]][:50]
     return {"range": rng, "by_service": by_service, "by_user": by_user,
             "heatmap": heatmap, "recent": recent, "unusual": unusual}
 

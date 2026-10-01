@@ -97,7 +97,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(body["counts"].get("fail"), 3)
         code, body = api.handle(con, {"q": "logins", "range": "24h"})
         self.assertEqual(len(body["unusual"]), 1)
-        self.assertTrue(body["unusual"][0]["new_ip"])
+        self.assertTrue(body["unusual"][0]["new_network"])
         code, body = api.handle(con, {"q": "status"}, pkg_dir=self.pkg)
         self.assertIn("sudo -u", body["collector_script"])
         con.close()
@@ -109,6 +109,27 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(api.handle(con, {"q": "blocks", "cc": "x'; --"})[0], 400)
         self.assertEqual(api.handle(con, {"q": "ip", "ip": "1.2.3"})[0], 400)
         self.assertEqual(api.handle(con, {"q": "blocks", "sort": "ip; DROP"})[0], 200)
+        con.close()
+
+    def test_unusual_ignores_ip_changes_within_a_network(self):
+        con = store.connect(os.path.join(self.tmp, "u.db"))
+        n = self.now
+        def ok(ts, ip, h):
+            return {"ts": ts, "ip": ip, "user": "admin", "service": "DSM",
+                    "result": "success", "source": "connlog", "hash": h}
+        store.add_auth_events(con, [
+            ok(n - 300, "8.8.8.1", "a"),   # first ever: new country + network
+            ok(n - 200, "8.8.8.2", "b"),   # same carrier, new IP: not flagged
+            ok(n - 100, "9.9.9.9", "c"),   # different carrier, same country
+            ok(n - 50, "1.1.1.1", "d"),    # different country
+        ])
+        for ip, cc, asn in (("8.8.8.1", "US", 701), ("8.8.8.2", "US", 701),
+                            ("9.9.9.9", "US", 7922), ("1.1.1.1", "JP", 2516)):
+            store.put_geo(con, ip, {"cc": cc, "asn": asn})
+        _, body = api.handle(con, {"q": "logins", "range": "24h"})
+        got = {u["ip"]: (bool(u["new_country"]), bool(u["new_network"])) for u in body["unusual"]}
+        self.assertEqual(got, {"8.8.8.1": (True, True), "9.9.9.9": (False, True),
+                               "1.1.1.1": (True, True)})
         con.close()
 
     def test_retention(self):

@@ -57,8 +57,25 @@
     if (s < 129600) return Math.round(s / 3600) + " h ago";
     return Math.round(s / 86400) + " days ago";
   }
+  // Windows has no flag emoji (it draws the letters), so detect colour flags once.
+  var EMOJI_FLAGS = (function () {
+    try {
+      var c = document.createElement("canvas");
+      c.width = c.height = 20;
+      var x = c.getContext("2d");
+      x.font = "16px sans-serif";
+      x.textBaseline = "top";
+      x.fillText(String.fromCodePoint(0x1f1fa, 0x1f1f8), 0, 0);
+      var d = x.getImageData(0, 0, 20, 20).data;
+      for (var i = 0; i < d.length; i += 4) {
+        if (d[i + 3] && (Math.abs(d[i] - d[i + 1]) > 20 || Math.abs(d[i + 1] - d[i + 2]) > 20)) return true;
+      }
+    } catch (e) { /* fall through */ }
+    return false;
+  })();
   function flag(cc) {
     if (!cc || cc.length !== 2) return "";
+    if (!EMOJI_FLAGS) return '<span class="cc">' + esc(cc.toUpperCase()) + "</span>";
     return String.fromCodePoint(0x1f1a5 + cc.charCodeAt(0), 0x1f1a5 + cc.charCodeAt(1));
   }
   function place(r) {
@@ -398,7 +415,7 @@
       var un = res.unusual;
       $("unusual-card").hidden = false;
       table($("lg-unusual"), [
-        { label: "", render: function (r) { return statusBadge("serious", r.new_country ? "New country" : "New IP"); } },
+        { label: "", render: function (r) { return statusBadge("serious", r.new_country ? "New country" : "New network"); } },
         { label: "When", render: function (r) { return esc(dt(r.ts)); } },
         { label: "User", key: "user" },
         { label: "Service", key: "service" },
@@ -588,6 +605,7 @@
     $("cc-label").innerHTML = state.cc ? "Country: " + flag(state.cc) + " " + esc(state.ccName || state.cc) : "";
     banner(null);
     chartBase();
+    if (state.tab !== "setup") loadFreshness();
     var p = LOADERS[state.tab]();
     if (state.tab === "map" && map) setTimeout(function () { try { map.updateSize(); } catch (e) { /* ignore */ } }, 0);
     return p.catch(showError);
@@ -650,17 +668,38 @@
     tip.style.top = (e.clientY + 14) + "px";
   });
 
+  // appearance: follow the computer (auto) or force light/dark
+  function applyTheme(t) {
+    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+    document.querySelectorAll("#st-theme button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.theme === (t || "auto"))); });
+  }
+  var theme = "auto";
+  try { theme = localStorage.getItem("secdash-theme") || "auto"; } catch (e) { /* ignore */ }
+  applyTheme(theme);
+  document.querySelectorAll("#st-theme button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      try { localStorage.setItem("secdash-theme", b.dataset.theme); } catch (e) { /* ignore */ }
+      applyTheme(b.dataset.theme);
+      chartBase();
+    });
+  });
+
   // theme changes repaint charts
   if (window.matchMedia) {
     var mq = matchMedia("(prefers-color-scheme: dark)");
     (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(function () { refresh(); });
   }
 
-  // freshness line + version, then first render
-  loadSetup().then(function (s) {
-    $("freshness").textContent = "Data from collector " + ago(s.collector_last_run);
-    if (!s.collector_last_run) { banner("warning", "The collector hasn't delivered any data yet. See the <b>Setup</b> tab."); }
-  }).catch(function () { /* handled by refresh */ });
+  function loadFreshness() {
+    return api("status").then(function (s) {
+      var last = s.collector_last_run;
+      $("freshness").textContent = last ? "Data from collector " + ago(last) : "Collector has not run yet";
+      $("version").textContent = "SecDash " + s.version;
+      if (!last) banner("warning", "The collector hasn't delivered any data yet. See the <b>Setup</b> tab.");
+    }).catch(function () { /* the tab's own request reports errors */ });
+  }
+
   refresh();
   setInterval(function () { if (!document.hidden && state.tab !== "setup" && $("drawer").hidden) refresh(); }, 5 * 60 * 1000);
 })();

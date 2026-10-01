@@ -211,3 +211,4 @@ html.sd .foot a { color: var(--muted); }
 html.sd .filters[hidden] ~ main { padding-top: 16px; }
 html.sd.embedded .brand { display: none; }
 html.sd.embedded .top { padding-top: 4px; }
+html.sd .cc { display: inline-block; min-width: 2.4em; padding: 0 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-align: center; color: var(--ink-2); vertical-align: 1px; }
