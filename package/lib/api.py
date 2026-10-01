@@ -179,7 +179,7 @@ def geo(con, p, now):
 
 
 BLOCK_SORTS = {"first_seen": "b.first_seen", "ip": "b.ip", "country": "g.country",
-               "org": "g.org", "attempts": "attempts", "expire": "b.expire"}
+               "org": "g.org", "attempts": "attempts", "expire": "b.expire", "via": "via"}
 
 
 def blocks(con, p, now):
@@ -205,7 +205,10 @@ def blocks(con, p, now):
         """SELECT b.ip, b.first_seen, b.expire, b.type, b.active,
                   g.cc, g.country, g.city, g.asn, g.org,
                   (SELECT COUNT(*) FROM auth_events e WHERE e.ip=b.ip AND e.result='fail')
-                      AS attempts
+                      AS attempts,
+                  (SELECT e.service FROM auth_events e
+                    WHERE e.ip=b.ip AND e.result IN ('blocked','fail') AND e.service IS NOT NULL
+                    ORDER BY e.result='blocked' DESC, e.ts DESC LIMIT 1) AS via
            FROM blocks b LEFT JOIN geo g ON g.ip=b.ip""" + where +
         " ORDER BY %s %s LIMIT ? OFFSET ?" % (sort, order), args + (limit, offset)))
     return {"range": rng, "total": total, "rows": rows}

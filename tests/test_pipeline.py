@@ -50,6 +50,8 @@ class PipelineTest(unittest.TestCase):
                       " [password] due to authorization failure."),
             (n - 90, "User [admin] from [1.1.1.1] signed in to [DSM] successfully via"
                      " [password]."),
+            # 1-failure threshold: DSM logs only the block, not the failure
+            (n - 80, "Host [198.51.100.9] was blocked via [SSH]."),
         ])
         self.run_cycle()
         self.assertEqual(self.d.pending_batches(), [])
@@ -57,7 +59,7 @@ class PipelineTest(unittest.TestCase):
         con = store.connect(self.d.db_path)
         self.assertEqual(con.execute("SELECT COUNT(*) FROM blocks").fetchone()[0], 2)
         self.assertEqual(con.execute(
-            "SELECT COUNT(*) FROM auth_events WHERE source='connlog'").fetchone()[0], 2)
+            "SELECT COUNT(*) FROM auth_events WHERE source='connlog'").fetchone()[0], 3)
         self.assertEqual(con.execute("SELECT COUNT(*) FROM http_events").fetchone()[0], 4)
         # private IP marked LAN; public IP gets some geo row (bundled DB may be absent in CI)
         self.assertEqual(con.execute(
@@ -91,7 +93,8 @@ class PipelineTest(unittest.TestCase):
         code, body = api.handle(con, {"q": "blocks", "range": "24h"})
         self.assertEqual(body["total"], 2)
         code, body = api.handle(con, {"q": "blocks", "range": "24h", "search": "198.51"})
-        self.assertEqual([r["ip"] for r in body["rows"]], ["198.51.100.9"])
+        self.assertEqual([(r["ip"], r["via"], r["attempts"]) for r in body["rows"]],
+                         [("198.51.100.9", "SSH", 1)])
         code, body = api.handle(con, {"q": "ip", "ip": "203.0.113.7"})
         self.assertEqual(code, 200)
         self.assertEqual(body["counts"].get("fail"), 3)

@@ -374,6 +374,7 @@
         { label: "State", render: function (r) {
           return r.active && (!r.expire || r.expire > now) ? statusBadge("critical", "Blocked") : '<span class="muted">Released</span>';
         } },
+        { label: "Blocked via", sort: "via", render: function (r) { return r.via ? esc(r.via) : '<span class="muted">—</span>'; } },
         { label: "Failed logins", sort: "attempts", num: true, key: "attempts" },
       ], res.rows, {
         ipKey: "ip", empty: "No blocked IPs match.",
@@ -391,7 +392,7 @@
   function exportCsv() {
     var b = state.bl;
     api("blocks", { search: b.q, active: b.active ? "1" : "0", sort: b.sort, dir: b.dir, limit: 5000, offset: 0 }).then(function (res) {
-      var cols = ["ip", "cc", "country", "city", "asn", "org", "first_seen", "expire", "active", "attempts"];
+      var cols = ["ip", "cc", "country", "city", "asn", "org", "first_seen", "expire", "active", "via", "attempts"];
       var lines = [cols.join(",")].concat(res.rows.map(function (r) {
         return cols.map(function (c) {
           var v = r[c];
