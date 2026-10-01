@@ -1,16 +1,24 @@
 {
-    ".url": {
-        "SYNO.SDS._ThirdParty.App.SecDash": {
-            "type": "legacy",
+    "SecDash.js": {
+        "SYNO.SDS.SecDash.Application": {
+            "type": "app",
             "title": "SecDash",
             "desc": "Security analytics: blocked IPs, logins, reverse proxy",
             "icon": "images/secdash_{0}.png",
-            "url": "/webman/3rdparty/SecDash/index.html",
+            "appWindow": "SYNO.SDS.SecDash.MainWindow",
+            "allowMultiInstance": false,
+            "allowStandalone": true,
             "allUsers": false,
             "grantPrivilege": "local",
             "advanceGrantPrivilege": true,
-            "width": 1180,
-            "height": 780
-        }
+            "depend": ["SYNO.SDS.SecDash.MainWindow"]
+        },
+        "SYNO.SDS.SecDash.MainWindow": {
+            "type": "lib",
+            "title": "SecDash",
+            "icon": "images/secdash_{0}.png",
+            "depend": ["SYNO.SDS.SecDash.Utils"]
+        },
+        "SYNO.SDS.SecDash.Utils": []
     }
 }

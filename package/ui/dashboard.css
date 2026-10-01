@@ -209,3 +209,5 @@ html.sd .drawer h3 { font-size: 13px; margin: 16px 0 6px; color: var(--ink-2); }
 html.sd .foot { display: flex; gap: 18px; flex-wrap: wrap; padding: 8px 16px 16px; color: var(--muted); font-size: 12px; }
 html.sd .foot a { color: var(--muted); }
 html.sd .filters[hidden] ~ main { padding-top: 16px; }
+html.sd.embedded .brand { display: none; }
+html.sd.embedded .top { padding-top: 4px; }

@@ -11,7 +11,22 @@ RANGES = {"24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400, "90d": 90 * 86400,
 BUCKETS = {"24h": 3600, "7d": 6 * 3600, "30d": 86400, "90d": 86400,
            "1y": 7 * 86400, "all": 7 * 86400}
 
-VERSION = os.environ.get("SYNOPKG_PKGVER", "dev")
+
+
+def _version():
+    if os.environ.get("SYNOPKG_PKGVER"):
+        return os.environ["SYNOPKG_PKGVER"]
+    try:  # CGIs don't get SYNOPKG_* variables; read the installed INFO file
+        with open("/var/packages/SecDash/INFO", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("version="):
+                    return line.split("=", 1)[1].strip().strip('"')
+    except OSError:
+        pass
+    return "dev"
+
+
+VERSION = _version()
 
 
 class BadRequest(Exception):

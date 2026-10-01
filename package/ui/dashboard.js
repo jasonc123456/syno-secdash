@@ -18,6 +18,7 @@
     if (saved.tab) state.tab = saved.tab;
   } catch (e) { /* storage unavailable */ }
 
+  try { if (window.self !== window.top) document.documentElement.classList.add("embedded"); } catch (e) { document.documentElement.classList.add("embedded"); }
   var TABS = ["overview", "map", "blocks", "logins", "web", "setup"];
   if (TABS.indexOf(location.hash.slice(1)) >= 0) state.tab = location.hash.slice(1);
 
@@ -75,12 +76,34 @@
     return '<span class="status ' + level + '">' + ICONS[level] + esc(label) + "</span>";
   }
 
+  // DSM's CSRF protection wants the session's SynoToken with every request.
+  // Inside the DSM window it lives on the desktop page that hosts our iframe.
+  var tokenPromise = null;
+  function synoToken() {
+    if (tokenPromise) return tokenPromise;
+    var t = "";
+    try { t = window.parent.SYNO.SDS.Session.SynoToken || ""; } catch (e) { /* not embedded */ }
+    if (t) { tokenPromise = Promise.resolve(t); return tokenPromise; }
+    tokenPromise = fetch("/webman/login.cgi?enable_syno_token=yes", { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { return (j && j.SynoToken) || ""; })
+      .catch(function () { return ""; });
+    return tokenPromise;
+  }
+
   function api(q, extra) {
     var p = new URLSearchParams(Object.assign({ q: q, range: state.range, tz: new Date().getTimezoneOffset() }, extra || {}));
     if (state.cc && !(extra && "cc" in extra)) p.set("cc", state.cc);
-    return fetch("api.cgi?" + p.toString(), { credentials: "same-origin" }).then(function (r) {
+    return synoToken().then(function (token) {
+      if (token) p.set("SynoToken", token);
+      return fetch("api.cgi?" + p.toString(), { credentials: "same-origin", headers: token ? { "X-SYNO-TOKEN": token } : {} });
+    }).then(function (r) {
       return r.json().catch(function () { return { error: "HTTP " + r.status }; }).then(function (body) {
-        if (!r.ok) throw new Error(body.error || "HTTP " + r.status);
+        if (!r.ok) {
+          var err = new Error(body.error || "HTTP " + r.status);
+          err.diag = body.diag;
+          throw err;
+        }
         return body;
       });
     });
@@ -548,7 +571,10 @@
 
   function showError(e) {
     var msg = e && e.message || String(e);
-    if (/not signed in|administrators only/.test(msg)) banner("critical", esc(msg) + ". Open SecDash from the DSM main menu as an administrator.");
+    if (/not signed in|administrators only/.test(msg)) {
+      banner("critical", esc(msg) + ". Open SecDash from the DSM main menu as an administrator." +
+        (e.diag ? '<div class="muted small">Details for a bug report: ' + esc(JSON.stringify(e.diag)) + "</div>" : ""));
+    }
     else if (/no data yet/.test(msg)) banner("warning", "No data yet. Set up the collector task on the <b>Setup</b> tab, then click <b>Run</b> in Task Scheduler.");
     else banner("critical", "Couldn't load data: " + esc(msg));
   }

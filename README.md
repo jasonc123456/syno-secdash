@@ -37,7 +37,7 @@ DSM 7 doesn't let third-party packages run as root, but DSM's security logs can 
 
   The copies are unpacked **as the unprivileged package user**, so root never writes into a folder the package controls. The script is stored in Task Scheduler, not in the package, so the package can't change what runs as root.
 - **The package** runs unprivileged. A small Python daemon (stdlib only, using DSM's built-in Python 3.8) parses each batch, skips entries it has already stored, and looks up where each IP is. Everything stays on the NAS.
-- **The dashboard** opens from the DSM main menu. Every API call is checked against your DSM session, and only members of `administrators` can see data.
+- **The dashboard** opens from the DSM main menu in a normal DSM window you can resize, minimise and maximise. Every API call is checked against your DSM session, and only members of `administrators` can see data.
 
 ## Install
 
@@ -103,7 +103,7 @@ The dev server serves the real UI and API, with the DSM login check skipped.
 | `package/bin/collector.sh` | root collector (copied into Task Scheduler by the user) |
 | `package/lib/ingest_*.py` | parsers for Auto Block, connection log, syslog, nginx |
 | `package/lib/api.py` | read-only query API used by `api.cgi` |
-| `package/ui/` | the DSM app: `index.html`, `app.js`, `api.cgi` (DSM auth check) |
+| `package/ui/` | the DSM app: `SecDash.js` + `config` (native DSM window), `index.html`/`dashboard.js` (the page inside it), `api.cgi` (DSM auth check) |
 | `scripts/`, `conf/`, `INFO.in` | DSM package metadata and lifecycle scripts |
 
 Releases are built by GitHub Actions. Pushing a `v*` tag attaches the `.spk` to a GitHub Release.
