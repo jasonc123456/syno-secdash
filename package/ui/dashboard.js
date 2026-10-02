@@ -762,6 +762,9 @@
       body: lines.join("\n"),
     };
   }
+  // The link opens in the top DSM page (target="_top"): DSM's Content-Security-Policy
+  // doesn't allow mailto: inside frames, and the dashboard frame would be replaced by
+  // a "This content is blocked" page.
   var MAILTO_MAX = 1900;  // longer mailto: links get cut off by some mail apps (Outlook)
   function mailtoHref(to, subject, body) {
     var base = "mailto:" + encodeURIComponent(to).replace(/%40/g, "@") + "?subject=" + encodeURIComponent(subject) + "&body=";
@@ -797,7 +800,7 @@
       '<label for="ab-subj">Subject</label><input id="ab-subj" type="text">' +
       '<label for="ab-body">Message</label><textarea id="ab-body" rows="14" spellcheck="false"></textarea>' +
       "</div>" +
-      '<div class="actions"><a class="btn primary" id="ab-mail" href="#">Open in email app</a><button class="btn" id="ab-copy" type="button">Copy message</button></div>' +
+      '<div class="actions"><a class="btn primary" id="ab-mail" href="#" target="_top">Open in email app</a><button class="btn" id="ab-copy" type="button">Copy message</button></div>' +
       '<p class="muted small" id="ab-note">Opens a draft in your own email app, so you can review it before sending. Nothing is sent from the NAS. Usernames that were tried aren\'t included.</p>';
     $("ab-subj").value = rep.subject;
     $("ab-body").value = rep.body;
