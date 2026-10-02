@@ -667,6 +667,177 @@
       tr.addEventListener("click", function () { openIp(tr.getAttribute("data-ip")); });
     });
   }
+  // ---------- WHOIS and abuse reports ----------
+  // Looked up only when a section is opened: one HTTPS request from the NAS to the
+  // registry that holds the address (ARIN, RIPE NCC, APNIC, LACNIC or AFRINIC).
+  var whoisCache = {};
+  function whoisFor(ip) {
+    if (!whoisCache[ip]) {
+      whoisCache[ip] = api("whois", { ip: ip, cc: "" });
+      whoisCache[ip].catch(function () { delete whoisCache[ip]; });  // allow a retry
+    }
+    return whoisCache[ip];
+  }
+  function whoisOpenPref(v) {
+    try {
+      if (v === undefined) return localStorage.getItem("secdash-whois-open") === "1";
+      localStorage.setItem("secdash-whois-open", v ? "1" : "0");
+    } catch (e) { /* storage unavailable */ }
+    return false;
+  }
+  function day(iso) {
+    var d = iso && new Date(iso);
+    return d && !isNaN(d) ? d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : null;
+  }
+  function renderWhois(w) {
+    var row = function (k, v) { return v ? "<dt>" + k + "</dt><dd>" + v + "</dd>" : ""; };
+    var abuse = w.abuse.length ? w.abuse.map(esc).join(", ") +
+      (w.abuse_source === "other" ? '<div class="muted small">No abuse contact is listed, so this is the network\'s technical contact.</div>' :
+        w.abuse_source === "remarks" ? '<div class="muted small">Taken from the record\'s remarks.</div>' : "") : '<span class="muted">none listed</span>';
+    var dates = [day(w.registered) && "registered " + day(w.registered), day(w.updated) && "updated " + day(w.updated)].filter(Boolean).join(" · ");
+    var h = '<dl class="kv">' +
+      row("Organisation", esc(w.org)) +
+      row("Network", esc(w.name) + (w.handle && w.handle !== w.name && w.handle.indexOf(" - ") < 0 ? ' <span class="muted">' + esc(w.handle) + "</span>" : "")) +
+      row("Range", esc(w.range) + (w.cidrs.length ? '<div class="muted small">' + w.cidrs.map(esc).join(", ") + "</div>" : "")) +
+      row("Country", w.country ? flag(w.country) + " " + esc(w.country) : "") +
+      row("Abuse contact", abuse) +
+      row("Dates", esc(dates)) +
+      row("Registry", esc(w.registry) + (w.link ? ' · <a href="' + esc(w.link) + '" target="_blank" rel="noopener">full record</a>' : "")) +
+      "</dl>";
+    var contacts = w.contacts.filter(function (c) { return c.emails.length || c.phones.length; });
+    if (contacts.length) {
+      h += '<h4>Contacts</h4><ul class="contacts">' + contacts.map(function (c) {
+        return "<li><b>" + esc(c.name || c.handle) + '</b> <span class="muted">' + esc(c.roles.join(", ")) + "</span>" +
+          (c.emails.length ? "<div>" + c.emails.map(esc).join(", ") + "</div>" : "") +
+          (c.phones.length ? '<div class="muted">' + c.phones.map(esc).join(", ") + "</div>" : "") + "</li>";
+      }).join("") + "</ul>";
+    }
+    if (w.remarks.length) {
+      h += "<h4>Remarks</h4>" + w.remarks.map(function (r) {
+        return '<pre class="remark">' + (r.title ? esc(r.title) + ": " : "") + esc(r.text) + "</pre>";
+      }).join("");
+    }
+    return h;
+  }
+
+  function utc(ts) { return new Date(ts * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC"; }
+  // Plain-text report built from what SecDash recorded for this IP. Usernames and
+  // your own host names are left out: the ISP only needs the source, times and type.
+  function abuseReport(r, w) {
+    var ip = r.ip;
+    var ev = r.auth.filter(function (e) { return e.result !== "success"; }).map(function (e) {
+      var svc = e.service || "a service";
+      return { ts: e.ts, text: e.result === "fail" ? "failed sign-in attempt (" + svc + ")" : "address blocked after failed sign-ins (" + svc + ")" };
+    }).concat(r.http.filter(function (e) { return e.status >= 400; }).map(function (e) {
+      return { ts: e.ts, text: "HTTP " + e.method + " " + e.path + " -> " + e.status };
+    })).sort(function (a, b) { return a.ts - b.ts; });
+    var fails = r.counts.fail || 0;
+    var web = r.http.filter(function (e) { return e.status >= 400; }).length;
+    var services = [];
+    r.auth.forEach(function (e) { if (e.result !== "success" && e.service && services.indexOf(e.service) < 0) services.push(e.service); });
+    var what = [];
+    if (fails) what.push(fails + " failed sign-in attempt" + (fails === 1 ? "" : "s") + (services.length ? " (" + services.join(", ") + ")" : ""));
+    if (web) what.push(web + " malicious or probing web request" + (web === 1 ? "" : "s"));
+    if (!what.length && r.block) what.push("blocked by my server after failed sign-ins");
+    var shown = ev.slice(-30);
+    var lines = [
+      "Hello,", "",
+      "I'm reporting abusive traffic from an IP address on your network" + (w.org ? " (" + w.org + ")" : "") + ". " +
+        "It looks like automated password guessing, typically from a compromised device or a rented server.", "",
+      "Source IP:   " + ip,
+      w.range ? "Network:     " + (w.name ? w.name + ", " : "") + w.range : null,
+      "Activity:    " + (what.join("; ") || "see log below"),
+      ev.length ? "First seen:  " + utc(ev[0].ts) : null,
+      ev.length ? "Last seen:   " + utc(ev[ev.length - 1].ts) : null,
+      r.block ? "The address was automatically blocked by my server's firewall on " + utc(r.block.first_seen) + "." : null,
+    ].filter(function (x) { return x !== null; });
+    if (shown.length) {
+      lines.push("", "Log excerpt (times in UTC):");
+      if (ev.length > shown.length) lines.push("(" + (ev.length - shown.length) + " earlier events omitted)");
+      shown.forEach(function (e) { lines.push(utc(e.ts) + "  " + ip + "  " + e.text); });
+    }
+    lines.push("", "Please investigate and take appropriate action. Full logs are available on request.", "", "Thank you.");
+    return {
+      subject: "Abuse report: " + (fails || r.block ? "password-guessing attempts" : "malicious web requests") + " from " + ip,
+      body: lines.join("\n"),
+    };
+  }
+  var MAILTO_MAX = 1900;  // longer mailto: links get cut off by some mail apps (Outlook)
+  function mailtoHref(to, subject, body) {
+    var base = "mailto:" + encodeURIComponent(to).replace(/%40/g, "@") + "?subject=" + encodeURIComponent(subject) + "&body=";
+    var full = base + encodeURIComponent(body);
+    if (full.length <= MAILTO_MAX) return { href: full, cut: false };
+    var lines = body.split("\n"), note = "\n\n[Message shortened. Full log available on request.]";
+    while (lines.length > 1 && (base + encodeURIComponent(lines.join("\n") + note)).length > MAILTO_MAX) lines.pop();
+    return { href: base + encodeURIComponent(lines.join("\n") + note), cut: true };
+  }
+  function copyText(text, btn, label, fallbackEl) {
+    var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = label; }, 1500); };
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done); return; }
+    if (fallbackEl.select) fallbackEl.select();
+    else { var rg = document.createRange(); rg.selectNodeContents(fallbackEl); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); }
+    document.execCommand("copy");
+    done();
+  }
+  function renderAbuse(box, r, w) {
+    var to = w.abuse.slice();
+    w.contacts.forEach(function (c) { c.emails.forEach(function (m) { if (to.indexOf(m) < 0) to.push(m); }); });
+    if (!to.length) {
+      box.innerHTML = '<div class="empty">The registry record has no email contact for this network.' +
+        (w.link ? ' <a href="' + esc(w.link) + '" target="_blank" rel="noopener">Check the full record</a>.' : "") + "</div>";
+      return;
+    }
+    var rep = abuseReport(r, w);
+    box.innerHTML =
+      (r.counts.success ? '<div class="note">' + statusBadge("warning", "") + "<div>This IP also has <b>successful</b> sign-ins. Make sure it isn't you or someone you know before reporting it.</div></div>" : "") +
+      '<div class="form">' +
+      '<label for="ab-to">To</label><select id="ab-to">' + to.map(function (m) {
+        return '<option value="' + esc(m) + '">' + esc(m) + (w.abuse.indexOf(m) >= 0 && w.abuse_source === "abuse" ? " (abuse contact)" : "") + "</option>";
+      }).join("") + "</select>" +
+      '<label for="ab-subj">Subject</label><input id="ab-subj" type="text">' +
+      '<label for="ab-body">Message</label><textarea id="ab-body" rows="14" spellcheck="false"></textarea>' +
+      "</div>" +
+      '<div class="actions"><a class="btn primary" id="ab-mail" href="#">Open in email app</a><button class="btn" id="ab-copy" type="button">Copy message</button></div>' +
+      '<p class="muted small" id="ab-note">Opens a draft in your own email app, so you can review it before sending. Nothing is sent from the NAS. Usernames that were tried aren\'t included.</p>';
+    $("ab-subj").value = rep.subject;
+    $("ab-body").value = rep.body;
+    var sync = function () {
+      var m = mailtoHref($("ab-to").value, $("ab-subj").value, $("ab-body").value);
+      $("ab-mail").href = m.href;
+      $("ab-note").innerHTML = m.cut
+        ? "This message is too long for an email link, so the draft is shortened. Use <b>Copy message</b> to paste the full text instead."
+        : "Opens a draft in your own email app, so you can review it before sending. Nothing is sent from the NAS. Usernames that were tried aren't included.";
+    };
+    ["ab-to", "ab-subj", "ab-body"].forEach(function (id) { $(id).addEventListener("input", sync); });
+    sync();
+    $("ab-copy").addEventListener("click", function () {
+      copyText("To: " + $("ab-to").value + "\nSubject: " + $("ab-subj").value + "\n\n" + $("ab-body").value, $("ab-copy"), "Copy message", $("ab-body"));
+    });
+  }
+  function bindLookups(r) {
+    var ip = r.ip, wBox = $("dr-whois-box"), aBox = $("dr-abuse-box");
+    if (!wBox) return;
+    var load = function (target, render) {
+      if (target.dataset.loaded) return;
+      target.dataset.loaded = "1";
+      target.innerHTML = '<div class="empty">Looking up ' + esc(ip) + "…</div>";
+      whoisFor(ip).then(function (w) {
+        if ($("dr-title").textContent === ip) render(w);
+      }).catch(function (e) {
+        delete target.dataset.loaded;
+        target.innerHTML = '<div class="empty">WHOIS lookup failed: ' + esc(e.message) + "</div>";
+      });
+    };
+    wBox.addEventListener("toggle", function () {
+      whoisOpenPref(wBox.open);
+      if (wBox.open) load($("dr-whois"), function (w) { $("dr-whois").innerHTML = renderWhois(w); });
+    });
+    aBox.addEventListener("toggle", function () {
+      if (aBox.open) load($("dr-abuse"), function (w) { renderAbuse($("dr-abuse"), r, w); });
+    });
+    if (whoisOpenPref()) wBox.open = true;
+  }
+
   function openIp(ip) {
     $("drawer").hidden = false;
     $("dr-title").textContent = ip;
@@ -679,8 +850,13 @@
         "<dt>Block</dt><dd>" + (b ? (b.active ? statusBadge("critical", "Blocked") : "Released") + " · first " + esc(dt(b.first_seen)) + (b.expire ? " · expires " + esc(dt(b.expire)) : " · no expiry") : "Never blocked") + "</dd>" +
         "<dt>Logins</dt><dd>" + fmt(r.counts.fail) + " failed · " + fmt(r.counts.success) + " successful · " + fmt(r.counts.blocked) + " blocked</dd>" +
         "</dl>";
+      if (g.cc !== "LAN") {
+        h += '<details class="sect" id="dr-whois-box"><summary>WHOIS</summary><div id="dr-whois"></div></details>' +
+          '<details class="sect" id="dr-abuse-box"><summary>Report abuse</summary><div id="dr-abuse"></div></details>';
+      }
       h += "<h3>Login events</h3><div id='dr-auth'></div><h3>Web requests</h3><div id='dr-http'></div>";
       $("dr-body").innerHTML = h;
+      bindLookups(r);
       table($("dr-auth"), [
         { label: "When", render: function (e) { return esc(dt(e.ts)); } },
         { label: "Result", key: "result" }, { label: "User", key: "user" }, { label: "Service", key: "service" },
@@ -755,10 +931,7 @@
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") $("drawer").hidden = true; });
   bindRetention();
   $("st-copy").addEventListener("click", function () {
-    var txt = $("st-script").textContent;
-    var done = function () { $("st-copy").textContent = "Copied"; setTimeout(function () { $("st-copy").textContent = "Copy script"; }, 1500); };
-    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done);
-    else { var r = document.createRange(); r.selectNodeContents($("st-script")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand("copy"); done(); }
+    copyText($("st-script").textContent, $("st-copy"), "Copy script", $("st-script"));
   });
   bindIpRows(document);
   document.addEventListener("click", function (e) {

@@ -6,7 +6,7 @@ A security analytics dashboard packaged as a `.spk` for Synology DSM 7. It shows
 - **Failed and successful sign-ins** to DSM, SSH, SMB, FTP and more, with most-tried usernames and a day-by-hour heatmap
 - **Successful sign-ins from a country or IP never seen before**
 - **Reverse-proxy traffic**: which IPs trigger 4xx/5xx errors, which paths get probed (`/wp-login.php`, `/.env`, …), and the user agents behind them
-- **Full history for any single IP** across every source
+- **Full history for any single IP** across every source, with its WHOIS record and a ready-to-send abuse report to the network's owner
 
 ![Overview](docs/screenshots/overview.png)
 
@@ -73,7 +73,14 @@ NGINX_LOGS="/var/log/nginx/*access*.log /volume1/docker/proxy/logs/*access*.log"
 
 ### What is stored
 
-Everything lives in `/var/packages/SecDash/var/secdash.db` on the NAS and is kept for 365 days by default. You can change that, or delete older records straight away, under **Setup › Data retention**. The only outbound traffic is the monthly download of the DB-IP database from `download.db-ip.com`. Uninstalling the package deletes the data. The collector task then does nothing, and you can delete it.
+Everything lives in `/var/packages/SecDash/var/secdash.db` on the NAS and is kept for 365 days by default. You can change that, or delete older records straight away, under **Setup › Data retention**. SecDash makes two kinds of outbound request:
+
+- the monthly download of the DB-IP database from `download.db-ip.com`
+- a WHOIS (RDAP) lookup when you expand **WHOIS** or **Report abuse** for an IP. This sends that IP to the regional internet registry that holds it: ARIN, RIPE NCC, APNIC, LACNIC or AFRINIC.
+
+**Report abuse** opens a draft in your own email app. Nothing is emailed from the NAS, and the usernames that were tried aren't included.
+
+Uninstalling the package deletes the data. The collector task then does nothing, and you can delete it.
 
 ## Checking your DSM's log formats
 
@@ -110,7 +117,8 @@ The dev server serves the real UI and API, with the DSM login check skipped.
 | `package/bin/secdashd.py` | daemon: ingest, GeoIP, retention, monthly DB update |
 | `package/bin/collector.sh` | root collector (copied into Task Scheduler by the user) |
 | `package/lib/ingest_*.py` | parsers for Auto Block, connection and system log, syslog, nginx |
-| `package/lib/api.py` | read-only query API used by `api.cgi` |
+| `package/lib/api.py` | query API used by `api.cgi` |
+| `package/lib/rdap.py` | WHOIS lookups over RDAP, using IANA's registry list (`rdap_bootstrap.json`) |
 | `package/ui/` | the DSM app: `SecDash.js` + `config` (native DSM window), `index.html`/`dashboard.js` (the page inside it), `api.cgi` (DSM auth check) |
 | `scripts/`, `conf/`, `INFO.in` | DSM package metadata and lifecycle scripts |
 

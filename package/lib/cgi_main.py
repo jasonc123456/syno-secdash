@@ -17,7 +17,7 @@ DB = os.path.join(VAR, "secdash.db")
 
 def respond(code, body):
     reason = {200: "OK", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed",
-              500: "Internal Server Error",
+              500: "Internal Server Error", 502: "Bad Gateway",
               503: "Service Unavailable"}.get(code, "")
     out = json.dumps(body, separators=(",", ":")).encode("utf-8")
     sys.stdout.write("Status: %d %s\r\nContent-Type: application/json\r\n"

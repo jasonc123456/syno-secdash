@@ -223,6 +223,28 @@ html.sd .kv dd { margin: 0; }
 html.sd .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: var(--surface); border-left: 1px solid var(--border); z-index: 40; overflow-y: auto; padding: 16px; box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12); }
 html.sd .drawer-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 html.sd .drawer h3 { font-size: 13px; margin: 16px 0 6px; color: var(--ink-2); }
+html.sd .drawer h4 { font-size: 12px; margin: 12px 0 4px; color: var(--ink-2); font-weight: 600; }
+html.sd .sect { border: 1px solid var(--border); border-radius: 8px; margin-top: 12px; }
+html.sd .sect > summary { cursor: pointer; padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--ink-2); list-style: none; display: flex; align-items: center; gap: 8px; }
+html.sd .sect > summary::-webkit-details-marker { display: none; }
+html.sd .sect > summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform 0.15s; }
+html.sd .sect[open] > summary::before { transform: rotate(45deg); }
+html.sd .sect > summary:hover { color: var(--ink); }
+html.sd .sect > div { padding: 0 12px 12px; }
+html.sd .contacts { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+html.sd .contacts li { padding: 4px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+html.sd .contacts li:first-child { border-top: 0; }
+html.sd pre.remark { white-space: pre-wrap; max-height: 160px; font-size: 12px; margin-bottom: 6px; padding: 8px; }
+html.sd .drawer .kv dd { overflow-wrap: anywhere; }
+html.sd .form { display: grid; grid-template-columns: max-content 1fr; gap: 8px 12px; align-items: start; font-size: 13px; }
+html.sd .form label { color: var(--ink-2); padding-top: 6px; }
+html.sd .form select, html.sd .form input, html.sd .form textarea { width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--ink); font: inherit; font-size: 13px; }
+html.sd .form textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; resize: vertical; }
+html.sd .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+html.sd a.btn { text-decoration: none; display: inline-block; }
+html.sd .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+html.sd .btn.primary:hover { filter: brightness(0.92); }
+html.sd .note { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--wash); font-size: 13px; }
 html.sd .foot { display: flex; gap: 18px; flex-wrap: wrap; padding: 8px 16px 16px; color: var(--muted); font-size: 12px; }
 html.sd .foot a { color: var(--muted); }
 html.sd .filters[hidden] ~ main { padding-top: 16px; }

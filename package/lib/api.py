@@ -1,10 +1,11 @@
-"""Read-only query layer behind api.cgi (and dev/serve.py).
+"""Query layer behind api.cgi (and dev/serve.py).
 
 handle(con, params) -> (http_status, dict). All SQL is parameterized.
 """
 import os
 import time
 
+import rdap
 import store
 
 RANGES = {"24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400, "90d": 90 * 86400,
@@ -340,6 +341,17 @@ def status(con, p, now, pkg_dir=None, db_path=None):
     }
 
 
+def whois(con, p, now):
+    from common import norm_ip
+    ip = norm_ip(p.get("ip"))
+    if not ip:
+        raise BadRequest("ip is required")
+    try:
+        return rdap.lookup(ip)
+    except ValueError as e:
+        raise BadRequest(str(e))
+
+
 RETENTION_CHOICES = (30, 90, 180, 365, 730, 1095, 1825, 0)  # 0 = keep forever
 
 
@@ -374,7 +386,8 @@ def prune(con, p, now):
 
 
 ENDPOINTS = {"summary": summary, "timeline": timeline, "geo": geo, "blocks": blocks,
-             "logins": logins, "web": web, "ip": ip_detail, "prune_preview": prune_preview}
+             "logins": logins, "web": web, "ip": ip_detail, "prune_preview": prune_preview,
+             "whois": whois}
 # These change data, so they are only served for POST requests (see cgi_main.py).
 WRITE_ENDPOINTS = {"settings": set_settings, "prune": prune}
 
@@ -395,3 +408,5 @@ def handle(con, params, pkg_dir=None, db_path=None, now=None, write=False):
         return 200, fn(con, params, now)
     except BadRequest as e:
         return 400, {"error": str(e)}
+    except rdap.LookupFailed as e:
+        return 502, {"error": str(e)}
